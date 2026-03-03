@@ -1,1 +1,79 @@
-# placeholder: PASO 6
+services:
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: salesdb
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./data.csv:/docker-entrypoint-initdb.d/data.csv
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d salesdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  ollama:
+    build: ./ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      # Passes only when sqlcoder is fully downloaded and listed by the server.
+      # start_period gives time for the initial model download on first run.
+      test: ["CMD-SHELL", "ollama list | grep -q sqlcoder"]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 60s
+    networks:
+      - internal
+
+  app:
+    build: ./app
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: salesdb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      OLLAMA_URL: http://ollama:11434
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+
+  ui:
+    build: ./ui
+    environment:
+      API_URL: http://app:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+  ollama_data:
+
+networks:
+  internal:
+    driver: bridge
