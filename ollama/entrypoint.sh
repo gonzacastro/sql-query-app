@@ -6,8 +6,9 @@ ollama serve &
 OLLAMA_PID=$!
 
 # Espera hasta que el servidor acepte conexiones
+# Usamos `ollama list` en lugar de curl porque la imagen no tiene curl instalado
 echo "[ollama] Waiting for server to start..."
-until curl -sf http://localhost:11434 > /dev/null 2>&1; do
+until ollama list > /dev/null 2>&1; do
     sleep 1
 done
 echo "[ollama] Server is ready"
